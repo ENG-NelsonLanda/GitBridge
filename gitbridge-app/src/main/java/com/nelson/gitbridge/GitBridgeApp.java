@@ -2,6 +2,7 @@ package com.nelson.gitbridge;
 
 import javafx.application.Application;
 import javafx.beans.property.SimpleStringProperty;
+import javafx.concurrent.Task;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -9,8 +10,13 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import javafx.geometry.Insets;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStreamReader;
 
 public class GitBridgeApp extends Application {
 
@@ -24,6 +30,10 @@ public class GitBridgeApp extends Application {
     VBox VBChanges = new VBox();
     VBox VBLog = new VBox();
     HBox HBRight = new HBox();
+    private String repositoryPath;
+    TextField TFPath = new TextField();
+    ComboBox CBRaiz = new ComboBox();
+    TableView<ChangeItem> TVChanges = new TableView<>();
 
     @Override
     public void start(Stage primaryStage) {
@@ -44,6 +54,72 @@ public class GitBridgeApp extends Application {
         primaryStage.setTitle("GitBridge");
         primaryStage.setScene(scene);
         primaryStage.show();
+    }
+
+    public class GitService {
+
+        public static String runGitCommand(String repoPath, String... command) throws Exception {
+
+            ProcessBuilder processBuilder = new ProcessBuilder(command);
+            processBuilder.directory(new File(repoPath));
+
+            Process process = processBuilder.start();
+
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()));
+
+            StringBuilder output = new StringBuilder();
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+
+            process.waitFor();
+
+            return output.toString();
+        }
+    }
+
+    private void refreshChanges() {
+        Task<String> task = new Task<>() {
+
+            @Override
+            protected String call() throws Exception {
+
+                return GitService.runGitCommand(
+                        repositoryPath,
+                        "git",
+                        "status",
+                        "--porcelain"
+                );
+            }
+        };
+
+        task.setOnSucceeded(e -> {
+
+            String output = task.getValue();
+
+            String[] parts = output.replace("gitbridge-app/", "").trim().split("\\n");
+
+            TVChanges.getItems().clear();
+
+            for (int i = 0; i < parts.length; i++) {
+
+                String[] badgeFile = parts[i].trim().split(" ");
+                String badge = badgeFile[0];
+                String file = badgeFile[1];
+
+                TVChanges.getItems().addAll(new ChangeItem(badge, file));
+
+
+
+            }
+
+        });
+
+        new Thread(task).start();
     }
 
     private void configureLayout() {
@@ -87,11 +163,12 @@ public class GitBridgeApp extends Application {
         BTSelectRepository.setText("Select Repository");
         BTSelectRepository.setOnAction(e -> System.out.println("¡Botón presionado!"));
         BTSelectRepository.getStyleClass().add("secondary-button");
+        BTSelectRepository.setOnAction(e -> selectRepository());
         HBTop.getChildren().add(BTSelectRepository);
 
-        TextField TFPath = new TextField();
         HBox.setHgrow(TFPath, Priority.ALWAYS);
         TFPath.setPromptText("Path");
+        TFPath.setEditable(false);
         TFPath.setMaxWidth(Double.MAX_VALUE);
         TFPath.getStyleClass().add("path-field");
         TFPath.getStyleClass().add("tf-path");
@@ -110,18 +187,52 @@ public class GitBridgeApp extends Application {
         BPMain.setTop(HBTop);
     }
 
+    private void selectRepository() {
+        DirectoryChooser directoryChooser = new DirectoryChooser();
+        directoryChooser.setTitle("Select Git Repository");
+
+        File selectedDirectory = directoryChooser.showDialog(BPMain.getScene().getWindow());
+
+        if (selectedDirectory != null) {
+
+            repositoryPath = selectedDirectory.getAbsolutePath();
+
+            TFPath.setText(repositoryPath);
+
+            loadRootFolders();
+
+            System.out.println(repositoryPath);
+        }
+    }
+
+    private void loadRootFolders() {
+
+        File repo = new File(repositoryPath);
+
+        File[] files = repo.listFiles(File::isDirectory);
+
+        CBRaiz.getItems().clear();
+
+        for (File file : files) {
+
+            if (!file.getName().equals(".git")) {
+                CBRaiz.getItems().add(file.getName());
+            }
+        }
+    }
+
     private void buildLeft() {
         VBLeft.getChildren().add(HBLeft);
         VBLeft.getChildren().add(VBChanges);
 
 
-        ComboBox CBRaiz = new ComboBox();
+
         CBRaiz.getStyleClass().add("cb-raiz");
         HBLeft.getChildren().add(CBRaiz);
 
         Button BTRefresh = new Button();
         BTRefresh.setText("Refresh");
-        BTRefresh.setOnAction(e -> System.out.println("¡Botón presionado!"));
+        BTRefresh.setOnAction(e -> refreshChanges());
         BTRefresh.getStyleClass().add("secondary-button");
         HBLeft.getChildren().add(BTRefresh);
 
@@ -185,7 +296,7 @@ public class GitBridgeApp extends Application {
 
         VBox.setMargin(LBChanges, new Insets(8, 0, 0, 0));
 
-        TableView<ChangeItem> TVChanges = new TableView<>();
+
 
         TableColumn<ChangeItem, String> colStatus = new TableColumn<>();
         TableColumn<ChangeItem, String> colFile = new TableColumn<>();
@@ -237,20 +348,20 @@ public class GitBridgeApp extends Application {
         colFile.setResizable(false);
         TVChanges.setSelectionModel(null);
 
-        TVChanges.getItems().addAll(
-                new ChangeItem("M", "src/main.cs"),
-                new ChangeItem("A", "README.md"),
-                new ChangeItem("D", "old_file.txt"),
-                new ChangeItem("M", "src/main.cs"),
-                new ChangeItem("A", "README.md"),
-                new ChangeItem("D", "old_file.txt"),
-                new ChangeItem("M", "src/main.cs"),
-                new ChangeItem("A", "README.md"),
-                new ChangeItem("D", "old_file.txt"),
-                new ChangeItem("M", "src/main.cs"),
-                new ChangeItem("A", "README.md"),
-                new ChangeItem("D", "old_file.txt")
-        );
+        //TVChanges.getItems().addAll(
+        //        new ChangeItem("M", "src/main.cs"),
+        //        new ChangeItem("A", "README.md"),
+        //        new ChangeItem("D", "old_file.txt"),
+        //        new ChangeItem("M", "src/main.cs"),
+        //        new ChangeItem("A", "README.md"),
+        //        new ChangeItem("D", "old_file.txt"),
+        //        new ChangeItem("M", "src/main.cs"),
+        //        new ChangeItem("A", "README.md"),
+        //        new ChangeItem("D", "old_file.txt"),
+        //        new ChangeItem("M", "src/main.cs"),
+        //        new ChangeItem("A", "README.md"),
+        //        new ChangeItem("D", "old_file.txt")
+        //);
 
         VBox.setVgrow(VBChanges, Priority.ALWAYS);
         VBox.setVgrow(TVChanges, Priority.ALWAYS);
