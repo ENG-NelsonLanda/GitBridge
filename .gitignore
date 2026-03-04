@@ -31,3 +31,19 @@ replay_pid*
 .DS_Store
 
 *.bak
+
+# Maven build folder
+target/
+
+# Maven wrapper
+.mvn/wrapper/maven-wrapper.jar
+
+# IntelliJ cache
+out/
+
+# OS Windows
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.swp
