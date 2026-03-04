@@ -10,6 +10,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.scene.text.Text;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import javafx.geometry.Insets;
@@ -34,6 +35,7 @@ public class GitBridgeApp extends Application {
     TextField TFPath = new TextField();
     ComboBox CBRaiz = new ComboBox();
     TableView<ChangeItem> TVChanges = new TableView<>();
+    TableColumn<ChangeItem, String> colFile = new TableColumn<>();
 
     @Override
     public void start(Stage primaryStage) {
@@ -111,13 +113,13 @@ public class GitBridgeApp extends Application {
                 String badge = badgeFile[0];
                 String file = badgeFile[1];
 
-                TVChanges.getItems().addAll(new ChangeItem(badge, file));
-
-
-
+                TVChanges.getItems().add(new ChangeItem(badge, file));
             }
 
-        });
+
+            autoResizeFileColumn();
+        }
+        );
 
         new Thread(task).start();
     }
@@ -299,7 +301,7 @@ public class GitBridgeApp extends Application {
 
 
         TableColumn<ChangeItem, String> colStatus = new TableColumn<>();
-        TableColumn<ChangeItem, String> colFile = new TableColumn<>();
+
 
         colStatus.setCellValueFactory(data ->
                 new SimpleStringProperty(data.getValue().getStatus()));
@@ -338,15 +340,17 @@ public class GitBridgeApp extends Application {
 
         TVChanges.getColumns().addAll(colStatus, colFile);
 
-        TVChanges.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-
         colStatus.setPrefWidth(40);
         colStatus.setMinWidth(40);
         colStatus.setMaxWidth(40);
         colStatus.setResizable(false);
 
         colFile.setResizable(false);
+        colFile.setMinWidth(200);
         TVChanges.setSelectionModel(null);
+        colFile.setPrefWidth(400); // valor inicial
+        colFile.setMinWidth(200);
+        colFile.setResizable(true);
 
         //TVChanges.getItems().addAll(
         //        new ChangeItem("M", "src/main.cs"),
@@ -370,6 +374,23 @@ public class GitBridgeApp extends Application {
         TVChanges.setMaxWidth(Double.MAX_VALUE);
         TVChanges.getStyleClass().add("table-view");
         TVChanges.getStyleClass().add("tv-changes");
+    }
+
+    private void autoResizeFileColumn() {
+
+        double max = 0;
+
+        for (ChangeItem item : TVChanges.getItems()) {
+
+            Text text = new Text(item.getFileName());
+            double width = text.getLayoutBounds().getWidth();
+
+            if (width > max) {
+                max = width;
+            }
+        }
+
+        colFile.setPrefWidth(max + 40);
     }
 
     private void buildRight() {

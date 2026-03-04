@@ -180,7 +180,7 @@
 
 .table-view .table-cell {
     -fx-border-width: 0;
-    -fx-padding: 4 6;
+    -fx-padding: 4 0;
 }
 
 .table-row-cell {
@@ -228,6 +228,24 @@
 }
 
 .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: -color-scroll-thumb-hover;
+}
+
+.scroll-bar:horizontal {
+    -fx-background-color: transparent;
+    -fx-pref-width: 10;
+}
+
+.scroll-bar:horizontal  .track {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar:horizontal .thumb {
+    -fx-background-color: -color-scroll-thumb;
+    -fx-background-radius: 5;
+}
+
+.scroll-bar:horizontal .thumb:hover {
     -fx-background-color: -color-scroll-thumb-hover;
 }
 
