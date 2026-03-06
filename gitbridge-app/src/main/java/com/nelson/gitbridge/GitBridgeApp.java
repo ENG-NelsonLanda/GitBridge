@@ -45,6 +45,7 @@ public class GitBridgeApp extends Application {
     Label LBRepoStatus = new Label("");
     TextArea TALog = new TextArea();
     TextField TFCommitTitle = new TextField();
+    TextArea TADescription = new TextArea();
 
     @Override
     public void start(Stage primaryStage) {
@@ -70,7 +71,7 @@ public class GitBridgeApp extends Application {
         primaryStage.show();
 
         Timeline autoRefresh = new Timeline(
-                new KeyFrame(Duration.seconds(5), e -> {
+                new KeyFrame(Duration.seconds(3), e -> {
                     if (repositoryPath != null) {
                         refreshChanges();
                     }
@@ -216,13 +217,32 @@ public class GitBridgeApp extends Application {
 
             TALog.appendText("Creating commit...\n");
 
-            String commitOutput = GitService.runGitCommand(
-                    repositoryPath,
-                    "git",
-                    "commit",
-                    "-m",
-                    title
-            );
+            String description = TADescription.getText().trim();
+
+            String commitOutput;
+
+            if (description == null || description.isBlank()) {
+
+                commitOutput = GitService.runGitCommand(
+                        repositoryPath,
+                        "git",
+                        "commit",
+                        "-m",
+                        title
+                );
+
+            } else {
+
+                commitOutput = GitService.runGitCommand(
+                        repositoryPath,
+                        "git",
+                        "commit",
+                        "-m",
+                        title,
+                        "-m",
+                        description
+                );
+            }
 
             TALog.appendText(commitOutput);
 
@@ -265,6 +285,7 @@ public class GitBridgeApp extends Application {
             }
 
             TFCommitTitle.setText("");
+            TADescription.setText("");
 
         } catch (Exception e) {
 
@@ -512,7 +533,6 @@ public class GitBridgeApp extends Application {
         TFCommitTitle.getStyleClass().add("tf-general");
         VBLeft.getChildren().add(TFCommitTitle);
 
-        TextArea TADescription = new TextArea();
         TADescription.setPromptText("Description");
         TADescription.setPrefRowCount(15);
         TADescription.setMaxWidth(Double.MAX_VALUE);
