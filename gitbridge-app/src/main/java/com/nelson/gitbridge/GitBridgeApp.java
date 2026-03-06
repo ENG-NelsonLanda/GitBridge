@@ -176,14 +176,6 @@ public class GitBridgeApp extends Application {
 
     private void commitPush() {
 
-        String title = TFCommitTitle.getText().trim();
-
-        if (title == null || title.isBlank()) {
-            TALog.clear();
-            TALog.appendText("Commit message is empty\n");
-            return;
-        }
-
         TALog.clear();
 
         try {
@@ -196,8 +188,26 @@ public class GitBridgeApp extends Application {
                     "--porcelain"
             );
 
+            // NO hay cambios → solo push
             if (status == null || status.isBlank()) {
-                TALog.appendText("Nothing to commit\n");
+
+                TALog.appendText("No changes to commit. Pushing existing commits...\n");
+
+                new GitService().runGitCommandLive(
+                        repositoryPath,
+                        () -> refreshIncomingOutgoing(),
+                        "git",
+                        "push"
+                );
+
+                return;
+            }
+
+            // SI hay cambios → pedir título
+            String title = TFCommitTitle.getText().trim();
+
+            if (title == null || title.isBlank()) {
+                TALog.appendText("Commit message is empty\n");
                 return;
             }
 
