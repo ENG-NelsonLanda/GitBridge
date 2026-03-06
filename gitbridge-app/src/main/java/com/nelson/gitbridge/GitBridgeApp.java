@@ -1,6 +1,9 @@
 package com.nelson.gitbridge;
 
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.concurrent.Task;
 import javafx.geometry.Pos;
@@ -14,6 +17,7 @@ import javafx.scene.text.Text;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import javafx.geometry.Insets;
+import javafx.util.Duration;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -33,9 +37,14 @@ public class GitBridgeApp extends Application {
     HBox HBRight = new HBox();
     private String repositoryPath;
     TextField TFPath = new TextField();
-    ComboBox CBRaiz = new ComboBox();
+    //ComboBox CBRaiz = new ComboBox();
     TableView<ChangeItem> TVChanges = new TableView<>();
     TableColumn<ChangeItem, String> colFile = new TableColumn<>();
+    Label LBOutgoing = new Label();
+    Label LBIncoming = new Label();
+    Label LBRepoStatus = new Label("");
+    TextArea TALog = new TextArea();
+    TextField TFCommitTitle = new TextField();
 
     @Override
     public void start(Stage primaryStage) {
@@ -51,11 +60,25 @@ public class GitBridgeApp extends Application {
 
         scene.getStylesheets().add(getClass().getResource("/styless.css").toExternalForm());
 
+        setRepoStatus("❓ Repo Not found", "repo-neutral");
+
         styless();
+        setDisableInit(true);
 
         primaryStage.setTitle("GitBridge");
         primaryStage.setScene(scene);
         primaryStage.show();
+
+        Timeline autoRefresh = new Timeline(
+                new KeyFrame(Duration.seconds(5), e -> {
+                    if (repositoryPath != null) {
+                        refreshChanges();
+                    }
+                })
+        );
+
+        autoRefresh.setCycleCount(Timeline.INDEFINITE);
+        autoRefresh.play();
     }
 
     public class GitService {
@@ -65,13 +88,15 @@ public class GitBridgeApp extends Application {
             ProcessBuilder processBuilder = new ProcessBuilder(command);
             processBuilder.directory(new File(repoPath));
 
+            processBuilder.redirectErrorStream(true);
+
             Process process = processBuilder.start();
 
             BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream()));
+                    new InputStreamReader(process.getInputStream())
+            );
 
             StringBuilder output = new StringBuilder();
-
             String line;
 
             while ((line = reader.readLine()) != null) {
@@ -82,6 +107,185 @@ public class GitBridgeApp extends Application {
 
             return output.toString();
         }
+
+        public void runGitCommandLive(String repoPath, Runnable onFinish, String... command) {
+
+            Task<Void> task = new Task<>() {
+
+                @Override
+                protected Void call() throws Exception {
+
+                    ProcessBuilder pb = new ProcessBuilder(command);
+                    pb.directory(new File(repoPath));
+                    pb.redirectErrorStream(true);
+
+                    Process process = pb.start();
+
+                    BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(process.getInputStream())
+                    );
+
+                    String line;
+
+                    while ((line = reader.readLine()) != null) {
+
+                        String finalLine = line;
+
+                        Platform.runLater(() -> {
+                            TALog.appendText(finalLine + "\n");
+                            TALog.positionCaret(TALog.getLength());
+                        });
+                    }
+
+                    process.waitFor();
+
+                    return null;
+                }
+            };
+
+            task.setOnSucceeded(e -> {
+                if (onFinish != null) {
+                    onFinish.run();
+                }
+            });
+
+            Thread thread = new Thread(task);
+            thread.setDaemon(true);
+            thread.start();
+        }
+    }
+
+    private void setDisableInit(boolean estado) {
+        VBLeft.setDisable(estado);
+        VBRight.setDisable(estado);
+    }
+
+    private void pullChanges() {
+        TALog.clear();
+
+        GitService service = new GitService();
+
+        service.runGitCommandLive(
+                repositoryPath,
+                () -> refreshIncomingOutgoing(),
+                "git",
+                "pull",
+                "--ff-only"
+        );
+    }
+
+    private void commitPush() {
+
+        String title = TFCommitTitle.getText().trim();
+
+        if (title == null || title.isBlank()) {
+            TALog.clear();
+            TALog.appendText("Commit message is empty\n");
+            return;
+        }
+
+        TALog.clear();
+
+        try {
+
+            // revisar si hay cambios
+            String status = GitService.runGitCommand(
+                    repositoryPath,
+                    "git",
+                    "status",
+                    "--porcelain"
+            );
+
+            if (status == null || status.isBlank()) {
+                TALog.appendText("Nothing to commit\n");
+                return;
+            }
+
+            TALog.appendText("Adding changes...\n");
+            GitService.runGitCommand(repositoryPath, "git", "add", ".");
+
+            TALog.appendText("Creating commit...\n");
+
+            String commitOutput = GitService.runGitCommand(
+                    repositoryPath,
+                    "git",
+                    "commit",
+                    "-m",
+                    title
+            );
+
+            TALog.appendText(commitOutput + "\n");
+
+            TALog.appendText("Pushing to remote...\n");
+
+            new GitService().runGitCommandLive(
+                    repositoryPath,
+                    () -> refreshIncomingOutgoing(),
+                    "git",
+                    "push"
+            );
+
+            TFCommitTitle.setText("");
+
+        } catch (Exception e) {
+
+            TALog.appendText("System error: " + e.getMessage() + "\n");
+        }
+    }
+
+    private void refreshIncomingOutgoing() {
+         Task<String> task = new Task<>() {
+
+            @Override
+            protected String call() throws Exception {
+
+                GitService.runGitCommand(
+                        repositoryPath,
+                        "git",
+                        "fetch",
+                        "--prune"
+                );
+
+                try {
+                    GitService.runGitCommand(
+                            repositoryPath,
+                            "git",
+                            "rev-parse",
+                            "--abbrev-ref",
+                            "--symbolic-full-name",
+                            "@{u}"
+                    );
+                } catch (Exception e) {
+                    return "NO_UPSTREAM";
+                }
+
+                return GitService.runGitCommand(
+                        repositoryPath,
+                        "git",
+                        "rev-list",
+                        "--left-right",
+                        "--count",
+                        "HEAD...@{upstream}"
+                );
+            }
+        };
+
+        task.setOnSucceeded(e -> {
+            String output = task.getValue();
+
+            if (output != null) {
+                String[] parts = output.trim().split("\\s+");
+
+                if (parts.length >= 2) {
+                    LBOutgoing.setText("Push: " + parts[0] + " ▲");
+                    LBIncoming.setText("Pull: " + parts[1] + " ▼");
+                }
+            }
+        }
+        );
+        Thread thread = new Thread(task);
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private void refreshChanges() {
@@ -94,7 +298,8 @@ public class GitBridgeApp extends Application {
                         repositoryPath,
                         "git",
                         "status",
-                        "--porcelain"
+                        "--porcelain=v1",
+                        "-u"
                 );
             }
         };
@@ -103,24 +308,22 @@ public class GitBridgeApp extends Application {
 
             String output = task.getValue();
 
-            String[] parts = output.replace("gitbridge-app/", "").trim().split("\\n");
+            String[] parts = output.replace("gitbridge-app/", "").split("\\n");
 
             TVChanges.getItems().clear();
 
-            for (int i = 0; i < parts.length; i++) {
+            for (String line : parts) {
 
-                String[] badgeFile = parts[i].trim().split(" ");
-                String badge = badgeFile[0];
-                String file = badgeFile[1];
+                String badge = line.substring(0, 2).trim();
+                String file = line.substring(3).trim();
 
                 TVChanges.getItems().add(new ChangeItem(badge, file));
             }
 
-
             autoResizeFileColumn();
+            refreshIncomingOutgoing();
         }
         );
-
         new Thread(task).start();
     }
 
@@ -156,6 +359,7 @@ public class GitBridgeApp extends Application {
 
     private void styless() {
         HBPathContainer.getStyleClass().add("path-container");
+        LBRepoStatus.getStyleClass().add("repo-status");
         VBChanges.getStyleClass().add("VBChanges");
         VBLog.getStyleClass().add("VBLog");
     }
@@ -173,10 +377,6 @@ public class GitBridgeApp extends Application {
         TFPath.setEditable(false);
         TFPath.setMaxWidth(Double.MAX_VALUE);
         TFPath.getStyleClass().add("path-field");
-        TFPath.getStyleClass().add("tf-path");
-
-        Label LBRepoStatus = new Label("✔ Repo OK");
-        LBRepoStatus.getStyleClass().add("repo-status");
 
         HBPathContainer.getChildren().addAll(TFPath, LBRepoStatus);
 
@@ -189,6 +389,11 @@ public class GitBridgeApp extends Application {
         BPMain.setTop(HBTop);
     }
 
+    private boolean isValidGitRepository(File directory) {
+        File gitFolder = new File(directory, ".git");
+        return gitFolder.exists() && gitFolder.isDirectory();
+    }
+
     private void selectRepository() {
         DirectoryChooser directoryChooser = new DirectoryChooser();
         directoryChooser.setTitle("Select Git Repository");
@@ -197,40 +402,36 @@ public class GitBridgeApp extends Application {
 
         if (selectedDirectory != null) {
 
-            repositoryPath = selectedDirectory.getAbsolutePath();
+            if (isValidGitRepository(selectedDirectory)) {
+                repositoryPath = selectedDirectory.getAbsolutePath();
 
-            TFPath.setText(repositoryPath);
+                TFPath.setText(repositoryPath);
 
-            loadRootFolders();
 
-            System.out.println(repositoryPath);
+
+                refreshChanges();
+
+                setRepoStatus("✔ Repo OK", "repo-ok");
+
+                setDisableInit(false);
+
+            } else {
+                setRepoStatus("✖ Repo Error", "repo-invalid");
+            }
         }
     }
 
-    private void loadRootFolders() {
+        private void setRepoStatus(String text, String styleClass) {
+        LBRepoStatus.setText(text);
 
-        File repo = new File(repositoryPath);
+            LBRepoStatus.getStyleClass().removeAll("repo-ok", "repo-invalid", "repo-neutral");
 
-        File[] files = repo.listFiles(File::isDirectory);
-
-        CBRaiz.getItems().clear();
-
-        for (File file : files) {
-
-            if (!file.getName().equals(".git")) {
-                CBRaiz.getItems().add(file.getName());
-            }
-        }
+            LBRepoStatus.getStyleClass().add(styleClass);
     }
 
     private void buildLeft() {
         VBLeft.getChildren().add(HBLeft);
         VBLeft.getChildren().add(VBChanges);
-
-
-
-        CBRaiz.getStyleClass().add("cb-raiz");
-        HBLeft.getChildren().add(CBRaiz);
 
         Button BTRefresh = new Button();
         BTRefresh.setText("Refresh");
@@ -238,8 +439,8 @@ public class GitBridgeApp extends Application {
         BTRefresh.getStyleClass().add("secondary-button");
         HBLeft.getChildren().add(BTRefresh);
 
-        Label LBOutgoing = new Label();
-        LBOutgoing.setText("Outgoing: ");
+
+        LBOutgoing.setText("Push: 0 ▲");
         LBOutgoing.setStyle("-fx-font-size: 14px;");
         HBLeft.getChildren().add(LBOutgoing);
 
@@ -267,7 +468,6 @@ public class GitBridgeApp extends Application {
         LBNewCommit.getStyleClass().add("new-commit");
         VBLeft.getChildren().add(LBNewCommit);
 
-        TextField TFCommitTitle = new TextField();
         TFCommitTitle.setPromptText("Commit title");
         TFCommitTitle.setStyle("-fx-font-size: 14px;");
         TFCommitTitle.getStyleClass().add("tf-general");
@@ -288,6 +488,7 @@ public class GitBridgeApp extends Application {
         BTCommitPush.setMaxWidth(Double.MAX_VALUE);
         BTCommitPush.setMaxWidth(Double.MAX_VALUE);
         BTCommitPush.getStyleClass().add("primary-button");
+        BTCommitPush.setOnAction(e -> commitPush());
         VBLeft.getChildren().add(BTCommitPush);
     }
 
@@ -396,12 +597,12 @@ public class GitBridgeApp extends Application {
     private void buildRight() {
         Button BTPull = new Button();
         BTPull.setText("Pull changes");
-        BTPull.setOnAction(e -> System.out.println("¡Botón presionado!"));
+        BTPull.setOnAction(e -> pullChanges());
         BTPull.getStyleClass().add("secondary-button");
         HBRight.getChildren().add(BTPull);
 
-        Label LBIncoming = new Label();
-        LBIncoming.setText("Incoming: ");
+
+        LBIncoming.setText("Pull: 0 ▼");
         LBIncoming.setStyle("-fx-font-size: 14px;");
         HBRight.getChildren().add(LBIncoming);
 
@@ -411,7 +612,6 @@ public class GitBridgeApp extends Application {
         VBox.setMargin(LBLog, new Insets(8, 0, 0, 0));
         LBLog.getStyleClass().add("title-panel");
 
-        TextArea TALog = new TextArea();
         TALog.setEditable(false);
         TALog.setWrapText(true);
         VBox.setVgrow(TALog, Priority.ALWAYS);

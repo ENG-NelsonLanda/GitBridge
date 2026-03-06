@@ -43,11 +43,22 @@
 .path-field {
     -fx-background-color: transparent;
     -fx-border-color: transparent;
-    -fx-padding: 4 0 4 0;
+    -fx-background-insets: 0;
+    -fx-border-width: 0;
 }
 
-.repo-status {
-    -fx-text-fill: #2e9e5b;
+.repo-ok {
+    -fx-text-fill: #2ecc71; /* verde */
+    -fx-font-weight: bold;
+}
+
+.repo-invalid {
+    -fx-text-fill: #e74c3c; /* rojo */
+    -fx-font-weight: bold;
+}
+
+.repo-neutral {
+    -fx-text-fill: #c6a217; /* amarillo */
     -fx-font-weight: bold;
 }
 
@@ -115,6 +126,7 @@
     -fx-background-radius: 6;
     -fx-border-radius: 6;
     -fx-padding: 6 10;
+    -fx-min-width: 120px;
 }
 
 .secondary-button:hover {
