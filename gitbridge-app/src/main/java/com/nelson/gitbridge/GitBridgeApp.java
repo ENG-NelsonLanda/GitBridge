@@ -228,12 +228,41 @@ public class GitBridgeApp extends Application {
 
             TALog.appendText("Pushing to remote...\n");
 
-            new GitService().runGitCommandLive(
+            TALog.appendText("Pushing to remote...\n");
+
+            String pushOutput = GitService.runGitCommand(
                     repositoryPath,
-                    () -> refreshIncomingOutgoing(),
                     "git",
                     "push"
             );
+
+            TALog.appendText(pushOutput);
+
+            if (pushOutput.contains("non-fast-forward") || pushOutput.contains("failed to push")) {
+
+                TALog.appendText("Remote has new commits. Pulling with rebase...\n");
+
+                String pullOutput = GitService.runGitCommand(
+                        repositoryPath,
+                        "git",
+                        "pull",
+                        "--rebase"
+                );
+
+                TALog.appendText(pullOutput);
+
+                TALog.appendText("Retrying push...\n");
+
+                new GitService().runGitCommandLive(
+                        repositoryPath,
+                        () -> refreshIncomingOutgoing(),
+                        "git",
+                        "push"
+                );
+
+            } else {
+                refreshIncomingOutgoing();
+            }
 
             TFCommitTitle.setText("");
 
