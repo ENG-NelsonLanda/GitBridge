@@ -170,7 +170,7 @@ public class GitBridgeApp extends Application {
                 () -> refreshIncomingOutgoing(),
                 "git",
                 "pull",
-                "--ff-only"
+                "--rebase"
         );
     }
 
@@ -214,7 +214,7 @@ public class GitBridgeApp extends Application {
                     title
             );
 
-            TALog.appendText(commitOutput + "\n");
+            TALog.appendText(commitOutput);
 
             TALog.appendText("Pushing to remote...\n");
 
