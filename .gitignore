@@ -33,7 +33,7 @@ replay_pid*
 *.bak
 
 # Maven build folder
-target/
+**/target/
 
 # Maven wrapper
 .mvn/wrapper/maven-wrapper.jar
