@@ -34,6 +34,7 @@ public class GitBridgeApp extends Application {
     HBox HBLeft = new HBox();
     VBox VBChanges = new VBox();
     VBox VBLog = new VBox();
+    VBox VBHistory = new VBox();
     HBox HBRight = new HBox();
     private String repositoryPath;
     TextField TFPath = new TextField();
@@ -46,6 +47,9 @@ public class GitBridgeApp extends Application {
     TextArea TALog = new TextArea();
     TextField TFCommitTitle = new TextField();
     TextArea TADescription = new TextArea();
+    Button BTCommitPush = new Button();
+    TextArea TAHistory = new TextArea();
+    Label LBHistory = new Label();
 
     @Override
     public void start(Stage primaryStage) {
@@ -57,7 +61,7 @@ public class GitBridgeApp extends Application {
 
         assembleLayout();
 
-        Scene scene = new Scene(BPMain, 750, 600);
+        Scene scene = new Scene(BPMain, 750, 800);
 
         scene.getStylesheets().add(getClass().getResource("/styless.css").toExternalForm());
 
@@ -133,8 +137,7 @@ public class GitBridgeApp extends Application {
                         String finalLine = line;
 
                         Platform.runLater(() -> {
-                            TALog.appendText(finalLine + "\n");
-                            TALog.positionCaret(TALog.getLength());
+                            log(finalLine + "\n");
                         });
                     }
 
@@ -173,9 +176,12 @@ public class GitBridgeApp extends Application {
                 "pull",
                 "--rebase"
         );
+        refreshCommitHistory();
     }
 
     private void commitPush() {
+
+        BTCommitPush.setDisable(true);
 
         TALog.clear();
 
@@ -192,7 +198,7 @@ public class GitBridgeApp extends Application {
             // NO hay cambios → solo push
             if (status == null || status.isBlank()) {
 
-                TALog.appendText("No changes to commit. Pushing existing commits...\n");
+                log("No changes to commit. Pushing existing commits...\n");
 
                 new GitService().runGitCommandLive(
                         repositoryPath,
@@ -208,14 +214,14 @@ public class GitBridgeApp extends Application {
             String title = TFCommitTitle.getText().trim();
 
             if (title == null || title.isBlank()) {
-                TALog.appendText("Commit message is empty\n");
+                log("Commit message is empty\n");
                 return;
             }
 
-            TALog.appendText("Adding changes...\n");
+            log("Adding changes...\n");
             GitService.runGitCommand(repositoryPath, "git", "add", ".");
 
-            TALog.appendText("Creating commit...\n");
+            log("Creating commit...\n");
 
             String description = TADescription.getText().trim();
 
@@ -244,11 +250,9 @@ public class GitBridgeApp extends Application {
                 );
             }
 
-            TALog.appendText(commitOutput);
+            log(commitOutput);
 
-            TALog.appendText("Pushing to remote...\n");
-
-            TALog.appendText("Pushing to remote...\n");
+            log("Pushing to remote...\n");
 
             String pushOutput = GitService.runGitCommand(
                     repositoryPath,
@@ -256,11 +260,11 @@ public class GitBridgeApp extends Application {
                     "push"
             );
 
-            TALog.appendText(pushOutput);
+            log(pushOutput);
 
             if (pushOutput.contains("non-fast-forward") || pushOutput.contains("failed to push")) {
 
-                TALog.appendText("Remote has new commits. Pulling with rebase...\n");
+                log("Remote has new commits. Pulling with rebase...\n");
 
                 String pullOutput = GitService.runGitCommand(
                         repositoryPath,
@@ -269,9 +273,9 @@ public class GitBridgeApp extends Application {
                         "--rebase"
                 );
 
-                TALog.appendText(pullOutput);
+                log(pullOutput);
 
-                TALog.appendText("Retrying push...\n");
+                log("Retrying push...\n");
 
                 new GitService().runGitCommandLive(
                         repositoryPath,
@@ -286,10 +290,42 @@ public class GitBridgeApp extends Application {
 
             TFCommitTitle.setText("");
             TADescription.setText("");
+            BTCommitPush.setDisable(false);
 
         } catch (Exception e) {
 
-            TALog.appendText("System error: " + e.getMessage() + "\n");
+            log("System error: " + e.getMessage() + "\n");
+        }
+        refreshCommitHistory();
+    }
+
+    private void log(String text) {
+        TALog.appendText(text);
+        TALog.positionCaret(TALog.getLength());
+    }
+
+    private void refreshCommitHistory() {
+
+        try {
+
+            String logOutput = GitService.runGitCommand(
+                    repositoryPath,
+                    "git",
+                    "log",
+                    "--pretty=format:%h | %ad | %an | %s",
+                    "--date=short",
+                    "-n",
+                    "20"
+            );
+
+            TAHistory.clear();
+            TAHistory.appendText(logOutput);
+
+            TAHistory.positionCaret(0);
+
+        } catch (Exception e) {
+
+            TAHistory.setText("Error loading history");
         }
     }
 
@@ -408,11 +444,19 @@ public class GitBridgeApp extends Application {
     }
 
     private void assembleLayout() {
-        VBRight.getChildren().addAll(HBRight, VBLog);
+
+        VBRight.getChildren().addAll(HBRight, VBLog, VBHistory);
+
         HBTop.getChildren().add(HBPathContainer);
+
         HBFather.getChildren().addAll(VBLeft, VBRight);
 
-        VBLeft.setMaxWidth(Double.MAX_VALUE);
+        VBLeft.setPrefWidth(320);
+        VBLeft.setMaxWidth(500);
+        HBox.setHgrow(VBLeft, Priority.NEVER);
+
+        HBox.setHgrow(VBRight, Priority.ALWAYS);
+        VBRight.setMaxWidth(Double.MAX_VALUE);
 
         BPMain.setCenter(HBFather);
     }
@@ -422,6 +466,7 @@ public class GitBridgeApp extends Application {
         LBRepoStatus.getStyleClass().add("repo-status");
         VBChanges.getStyleClass().add("VBChanges");
         VBLog.getStyleClass().add("VBLog");
+        VBHistory.getStyleClass().add("VBLog");
     }
 
     private void buildTop() {
@@ -443,8 +488,8 @@ public class GitBridgeApp extends Application {
         HBox.setHgrow(HBPathContainer, Priority.ALWAYS);
         HBPathContainer.setMaxWidth(Double.MAX_VALUE);
 
-        VBLeft.prefWidthProperty().bind(HBFather.widthProperty().multiply(0.460));
-        VBRight.prefWidthProperty().bind(HBFather.widthProperty().multiply(0.540));
+        //VBLeft.prefWidthProperty().bind(HBFather.widthProperty().multiply(0.460));
+        //VBRight.prefWidthProperty().bind(HBFather.widthProperty().multiply(0.540));
 
         BPMain.setTop(HBTop);
     }
@@ -475,10 +520,13 @@ public class GitBridgeApp extends Application {
 
                 setDisableInit(false);
 
+                refreshCommitHistory();
+
             } else {
                 setRepoStatus("✖ Repo Error", "repo-invalid");
             }
         }
+
     }
 
         private void setRepoStatus(String text, String styleClass) {
@@ -520,6 +568,7 @@ public class GitBridgeApp extends Application {
 
         VBChanges.setAlignment(Pos.TOP_CENTER);
         VBLog.setAlignment(Pos.TOP_CENTER);
+        VBHistory.setAlignment(Pos.TOP_CENTER);
 
         VBChanges.setMaxWidth(Double.MAX_VALUE);
 
@@ -536,13 +585,15 @@ public class GitBridgeApp extends Application {
         TADescription.setPromptText("Description");
         TADescription.setPrefRowCount(15);
         TADescription.setMaxWidth(Double.MAX_VALUE);
+        TADescription.setMinHeight(75);
+        TADescription.setMaxHeight(150);
         VBox.setVgrow(TADescription, Priority.ALWAYS);
         TADescription.setWrapText(true);
         TADescription.setStyle("-fx-font-size: 14px;");
         TADescription.getStyleClass().add("tf-general");
         VBLeft.getChildren().add(TADescription);
 
-        Button BTCommitPush = new Button();
+
         BTCommitPush.setText("Commit & Push");
         BTCommitPush.setMaxWidth(Double.MAX_VALUE);
         BTCommitPush.setMaxWidth(Double.MAX_VALUE);
@@ -654,12 +705,15 @@ public class GitBridgeApp extends Application {
     }
 
     private void buildRight() {
+
+        VBox.setVgrow(VBLog, Priority.ALWAYS);
+        VBox.setVgrow(VBHistory, Priority.ALWAYS);
+
         Button BTPull = new Button();
         BTPull.setText("Pull changes");
         BTPull.setOnAction(e -> pullChanges());
         BTPull.getStyleClass().add("secondary-button");
         HBRight.getChildren().add(BTPull);
-
 
         LBIncoming.setText("Pull: 0 ▼");
         LBIncoming.setStyle("-fx-font-size: 14px;");
@@ -675,10 +729,25 @@ public class GitBridgeApp extends Application {
         TALog.setWrapText(true);
         VBox.setVgrow(TALog, Priority.ALWAYS);
         TALog.setMaxHeight(Double.MAX_VALUE);
-        TALog.setStyle("-fx-font-size: 14px;");
+        TALog.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 14px;");
         TALog.getStyleClass().add("console-log");
         VBLog.getChildren().addAll(LBLog, TALog);
+        VBHistory.getChildren().addAll(LBHistory, TAHistory);
         VBRight.setMaxWidth(Double.MAX_VALUE);
+
+        LBHistory.setText("Commit History");
+        LBHistory.setStyle("-fx-font-size: 14px;");
+        VBox.setMargin(LBHistory, new Insets(8, 0, 0, 0));
+        LBHistory.getStyleClass().add("title-panel");
+
+        TAHistory.setEditable(false);
+        TAHistory.setWrapText(true);
+        VBox.setVgrow(TAHistory, Priority.ALWAYS);
+        TAHistory.setMaxHeight(Double.MAX_VALUE);
+        TAHistory.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 14px;");
+        VBLog.prefHeightProperty().bind(VBRight.heightProperty().multiply(0.61));
+        VBHistory.prefHeightProperty().bind(VBRight.heightProperty().multiply(0.39));
+        TAHistory.getStyleClass().add("console-log");
     }
 
     public static void main(String[] args) {
