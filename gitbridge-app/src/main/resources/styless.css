@@ -283,3 +283,24 @@
 .status-deleted {
     -fx-background-color: #e57373;
 }
+
+/* =========================================================
+   DIVIDER
+   ========================================================= */
+
+.split-pane {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.split-pane .viewport {
+    -fx-background-color: transparent;
+}
+
+.split-pane .content {
+    -fx-background-color: transparent;
+}
+
+.split-pane > .split-pane-divider {
+    -fx-background-color: transparent;
+}

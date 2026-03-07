@@ -6,6 +6,7 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.concurrent.Task;
+import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -36,9 +37,9 @@ public class GitBridgeApp extends Application {
     VBox VBLog = new VBox();
     VBox VBHistory = new VBox();
     HBox HBRight = new HBox();
+    VBox VBDiff = new VBox();
     private String repositoryPath;
     TextField TFPath = new TextField();
-    //ComboBox CBRaiz = new ComboBox();
     TableView<ChangeItem> TVChanges = new TableView<>();
     TableColumn<ChangeItem, String> colFile = new TableColumn<>();
     Label LBOutgoing = new Label();
@@ -50,6 +51,11 @@ public class GitBridgeApp extends Application {
     Button BTCommitPush = new Button();
     TextArea TAHistory = new TextArea();
     Label LBHistory = new Label();
+    TextArea TADiff = new TextArea();
+    Label LBDiff = new Label();
+    Label LBChanges = new Label();
+    SplitPane splitCenter = new SplitPane();
+    SplitPane splitRight = new SplitPane();
 
     @Override
     public void start(Stage primaryStage) {
@@ -162,6 +168,7 @@ public class GitBridgeApp extends Application {
     private void setDisableInit(boolean estado) {
         VBLeft.setDisable(estado);
         VBRight.setDisable(estado);
+        splitCenter.setDisable(estado);
     }
 
     private void pullChanges() {
@@ -187,7 +194,6 @@ public class GitBridgeApp extends Application {
 
         try {
 
-            // revisar si hay cambios
             String status = GitService.runGitCommand(
                     repositoryPath,
                     "git",
@@ -195,7 +201,6 @@ public class GitBridgeApp extends Application {
                     "--porcelain"
             );
 
-            // NO hay cambios → solo push
             if (status == null || status.isBlank()) {
 
                 log("No changes to commit. Pushing existing commits...\n");
@@ -210,7 +215,6 @@ public class GitBridgeApp extends Application {
                 return;
             }
 
-            // SI hay cambios → pedir título
             String title = TFCommitTitle.getText().trim();
 
             if (title == null || title.isBlank()) {
@@ -418,6 +422,7 @@ public class GitBridgeApp extends Application {
 
             autoResizeFileColumn();
             refreshIncomingOutgoing();
+            LBChanges.setText("Changes: (" + TVChanges.getItems().size() + ")");
         }
         );
         new Thread(task).start();
@@ -427,9 +432,8 @@ public class GitBridgeApp extends Application {
         HBPathContainer.setAlignment(Pos.CENTER_LEFT);
         HBPathContainer.setSpacing(8);
 
-        HBFather.setSpacing(9);
-        HBFather.setPadding(new Insets(1, 9, 9, 9));
-        HBFather.setFillHeight(true);
+        splitCenter.setPadding(new Insets(1, 9, 9, 9));
+        splitCenter.setDividerPositions(0.45);
 
         HBTop.setSpacing(9);
         HBTop.setPadding(new Insets(9));
@@ -445,11 +449,10 @@ public class GitBridgeApp extends Application {
 
     private void assembleLayout() {
 
-        VBRight.getChildren().addAll(HBRight, VBLog, VBHistory);
-
         HBTop.getChildren().add(HBPathContainer);
 
-        HBFather.getChildren().addAll(VBLeft, VBRight);
+        splitCenter.getItems().addAll(VBLeft, VBRight);
+        BPMain.setCenter(splitCenter);
 
         VBLeft.setPrefWidth(320);
         VBLeft.setMaxWidth(500);
@@ -457,8 +460,6 @@ public class GitBridgeApp extends Application {
 
         HBox.setHgrow(VBRight, Priority.ALWAYS);
         VBRight.setMaxWidth(Double.MAX_VALUE);
-
-        BPMain.setCenter(HBFather);
     }
 
     private void styless() {
@@ -467,6 +468,7 @@ public class GitBridgeApp extends Application {
         VBChanges.getStyleClass().add("VBChanges");
         VBLog.getStyleClass().add("VBLog");
         VBHistory.getStyleClass().add("VBLog");
+        VBDiff.getStyleClass().add("VBLog");
     }
 
     private void buildTop() {
@@ -487,9 +489,6 @@ public class GitBridgeApp extends Application {
 
         HBox.setHgrow(HBPathContainer, Priority.ALWAYS);
         HBPathContainer.setMaxWidth(Double.MAX_VALUE);
-
-        //VBLeft.prefWidthProperty().bind(HBFather.widthProperty().multiply(0.460));
-        //VBRight.prefWidthProperty().bind(HBFather.widthProperty().multiply(0.540));
 
         BPMain.setTop(HBTop);
     }
@@ -526,7 +525,6 @@ public class GitBridgeApp extends Application {
                 setRepoStatus("✖ Repo Error", "repo-invalid");
             }
         }
-
     }
 
         private void setRepoStatus(String text, String styleClass) {
@@ -543,10 +541,12 @@ public class GitBridgeApp extends Application {
 
         Button BTRefresh = new Button();
         BTRefresh.setText("Refresh");
-        BTRefresh.setOnAction(e -> refreshChanges());
+        BTRefresh.setOnAction(e -> {
+            refreshChanges();
+            refreshCommitHistory();
+        });
         BTRefresh.getStyleClass().add("secondary-button");
         HBLeft.getChildren().add(BTRefresh);
-
 
         LBOutgoing.setText("Push: 0 ▲");
         LBOutgoing.setStyle("-fx-font-size: 14px;");
@@ -569,6 +569,7 @@ public class GitBridgeApp extends Application {
         VBChanges.setAlignment(Pos.TOP_CENTER);
         VBLog.setAlignment(Pos.TOP_CENTER);
         VBHistory.setAlignment(Pos.TOP_CENTER);
+        VBDiff.setAlignment(Pos.TOP_CENTER);
 
         VBChanges.setMaxWidth(Double.MAX_VALUE);
 
@@ -593,7 +594,6 @@ public class GitBridgeApp extends Application {
         TADescription.getStyleClass().add("tf-general");
         VBLeft.getChildren().add(TADescription);
 
-
         BTCommitPush.setText("Commit & Push");
         BTCommitPush.setMaxWidth(Double.MAX_VALUE);
         BTCommitPush.setMaxWidth(Double.MAX_VALUE);
@@ -603,16 +603,12 @@ public class GitBridgeApp extends Application {
     }
 
     private void buildTableChanges() {
-        Label LBChanges = new Label();
         LBChanges.setText("Changes");
         LBChanges.getStyleClass().add("title-panel");
 
         VBox.setMargin(LBChanges, new Insets(8, 0, 0, 0));
 
-
-
         TableColumn<ChangeItem, String> colStatus = new TableColumn<>();
-
 
         colStatus.setCellValueFactory(data ->
                 new SimpleStringProperty(data.getValue().getStatus()));
@@ -659,24 +655,9 @@ public class GitBridgeApp extends Application {
         colFile.setResizable(false);
         colFile.setMinWidth(200);
         TVChanges.setSelectionModel(null);
-        colFile.setPrefWidth(400); // valor inicial
+        colFile.setPrefWidth(400);
         colFile.setMinWidth(200);
         colFile.setResizable(true);
-
-        //TVChanges.getItems().addAll(
-        //        new ChangeItem("M", "src/main.cs"),
-        //        new ChangeItem("A", "README.md"),
-        //        new ChangeItem("D", "old_file.txt"),
-        //        new ChangeItem("M", "src/main.cs"),
-        //        new ChangeItem("A", "README.md"),
-        //        new ChangeItem("D", "old_file.txt"),
-        //        new ChangeItem("M", "src/main.cs"),
-        //        new ChangeItem("A", "README.md"),
-        //        new ChangeItem("D", "old_file.txt"),
-        //        new ChangeItem("M", "src/main.cs"),
-        //        new ChangeItem("A", "README.md"),
-        //        new ChangeItem("D", "old_file.txt")
-        //);
 
         VBox.setVgrow(VBChanges, Priority.ALWAYS);
         VBox.setVgrow(TVChanges, Priority.ALWAYS);
@@ -700,7 +681,6 @@ public class GitBridgeApp extends Application {
                 max = width;
             }
         }
-
         colFile.setPrefWidth(max + 40);
     }
 
@@ -741,13 +721,52 @@ public class GitBridgeApp extends Application {
         LBHistory.getStyleClass().add("title-panel");
 
         TAHistory.setEditable(false);
-        TAHistory.setWrapText(true);
+        TAHistory.setWrapText(false);
         VBox.setVgrow(TAHistory, Priority.ALWAYS);
         TAHistory.setMaxHeight(Double.MAX_VALUE);
         TAHistory.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 14px;");
-        VBLog.prefHeightProperty().bind(VBRight.heightProperty().multiply(0.61));
-        VBHistory.prefHeightProperty().bind(VBRight.heightProperty().multiply(0.39));
         TAHistory.getStyleClass().add("console-log");
+
+        LBDiff.setText("Diff");
+        LBDiff.setStyle("-fx-font-size: 14px;");
+        VBox.setMargin(LBDiff, new Insets(8, 0, 0, 0));
+        LBDiff.getStyleClass().add("title-panel");
+
+        TADiff.setEditable(false);
+        TADiff.setWrapText(false);
+        VBox.setVgrow(TADiff, Priority.ALWAYS);
+        TADiff.setMaxHeight(Double.MAX_VALUE);
+        TADiff.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 14px;");
+        TADiff.getStyleClass().add("console-log");
+
+        VBDiff.getChildren().addAll(LBDiff, TADiff);
+
+        splitRight.setOrientation(Orientation.VERTICAL);
+
+        splitRight.getItems().addAll(
+
+                VBDiff,
+                VBLog,
+                VBHistory
+        );
+
+        splitRight.setDividerPositions(0.3, 0.6);
+
+        VBox.setVgrow(splitRight, Priority.ALWAYS);
+        splitRight.setMaxHeight(Double.MAX_VALUE);
+
+        VBRight.getChildren().addAll(
+                HBRight,
+                splitRight
+        );
+
+        splitCenter.setOrientation(Orientation.HORIZONTAL);
+
+        VBox.setVgrow(splitCenter, Priority.ALWAYS);
+        splitCenter.setMaxHeight(Double.MAX_VALUE);
+        splitCenter.getStyleClass().add("split-pane");
+
+        splitRight.getStyleClass().add("split-pane");
     }
 
     public static void main(String[] args) {
