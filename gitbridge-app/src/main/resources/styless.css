@@ -169,16 +169,16 @@
    TABLEVIEW
    ========================================================= */
 
-.table-view {
+.tv-changes {
     -fx-background-color: transparent;
     -fx-border-color: transparent;
 }
 
-.table-view .viewport {
+.tv-changes .viewport {
     -fx-background-color: transparent;
 }
 
-.table-view .column-header-background {
+.tv-changes .column-header-background {
     -fx-max-height: 0;
     -fx-pref-height: 0;
     -fx-min-height: 0;
@@ -186,13 +186,22 @@
     -fx-background-color: transparent;
 }
 
-.table-view .column-header {
+.tv-changes .column-header {
     -fx-padding: 0;
 }
 
-.table-view .table-cell {
+.tv-changes .table-cell {
     -fx-border-width: 0;
     -fx-padding: 4 0;
+}
+
+.tv-changes .table-row-cell:selected {
+    -fx-background-color: #EDE9E4;
+}
+
+.tv-changes .table-row-cell:selected .table-cell {
+    -fx-text-fill: black;
+    -fx-font-weight: bold;
 }
 
 .table-row-cell {

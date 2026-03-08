@@ -19,6 +19,7 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import javafx.geometry.Insets;
 import javafx.util.Duration;
+import javafx.beans.InvalidationListener;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -26,36 +27,54 @@ import java.io.InputStreamReader;
 
 public class GitBridgeApp extends Application {
 
+    // ===== Application State =====
+    private String repositoryPath;
+
+    // ===== Layout Containers =====
     BorderPane BPMain = new BorderPane();
-    HBox HBFather = new HBox();
+
     HBox HBTop = new HBox();
     HBox HBPathContainer = new HBox();
+
     VBox VBLeft = new VBox();
-    VBox VBRight = new VBox();
     HBox HBLeft = new HBox();
     VBox VBChanges = new VBox();
     VBox VBLog = new VBox();
-    VBox VBHistory = new VBox();
+
+    VBox VBRight = new VBox();
     HBox HBRight = new HBox();
+    VBox VBHistory = new VBox();
     VBox VBDiff = new VBox();
-    private String repositoryPath;
+
+    // ===== Structural Controls =====
+    SplitPane splitCenter = new SplitPane();
+    SplitPane splitRight = new SplitPane();
+
+    // ===== Input Controls =====
     TextField TFPath = new TextField();
-    TableView<ChangeItem> TVChanges = new TableView<>();
-    TableColumn<ChangeItem, String> colFile = new TableColumn<>();
+    TextField TFCommitTitle = new TextField();
+
+    TextArea TALog = new TextArea();
+    TextArea TADescription = new TextArea();
+    TextArea TAHistory = new TextArea();
+    TextArea TADiff = new TextArea();
+
+    // ===== Labels =====
     Label LBOutgoing = new Label();
     Label LBIncoming = new Label();
     Label LBRepoStatus = new Label("");
-    TextArea TALog = new TextArea();
-    TextField TFCommitTitle = new TextField();
-    TextArea TADescription = new TextArea();
-    Button BTCommitPush = new Button();
-    TextArea TAHistory = new TextArea();
+
     Label LBHistory = new Label();
-    TextArea TADiff = new TextArea();
     Label LBDiff = new Label();
     Label LBChanges = new Label();
-    SplitPane splitCenter = new SplitPane();
-    SplitPane splitRight = new SplitPane();
+
+    // ===== Buttons =====
+    Button BTCommitPush = new Button();
+
+    // ===== Table =====
+    TableView<ChangeItem> TVChanges = new TableView<>();
+    TableColumn<ChangeItem, String> colStatus = new TableColumn<>();
+    TableColumn<ChangeItem, String> colFile = new TableColumn<>();
 
     @Override
     public void start(Stage primaryStage) {
@@ -83,7 +102,8 @@ public class GitBridgeApp extends Application {
         Timeline autoRefresh = new Timeline(
                 new KeyFrame(Duration.seconds(3), e -> {
                     if (repositoryPath != null) {
-                        refreshChanges();
+                        //refreshChanges();
+                        refreshAll();
                     }
                 })
         );
@@ -178,12 +198,12 @@ public class GitBridgeApp extends Application {
 
         service.runGitCommandLive(
                 repositoryPath,
-                () -> refreshIncomingOutgoing(),
+                () -> refreshAll(),
                 "git",
                 "pull",
                 "--rebase"
         );
-        refreshCommitHistory();
+        refreshAll();
     }
 
     private void commitPush() {
@@ -207,7 +227,7 @@ public class GitBridgeApp extends Application {
 
                 new GitService().runGitCommandLive(
                         repositoryPath,
-                        () -> refreshIncomingOutgoing(),
+                        () -> refreshAll(),
                         "git",
                         "push"
                 );
@@ -217,7 +237,7 @@ public class GitBridgeApp extends Application {
 
             String title = TFCommitTitle.getText().trim();
 
-            if (title == null || title.isBlank()) {
+            if (title.isBlank()) {
                 log("Commit message is empty\n");
                 return;
             }
@@ -231,7 +251,7 @@ public class GitBridgeApp extends Application {
 
             String commitOutput;
 
-            if (description == null || description.isBlank()) {
+            if (description.isBlank()) {
 
                 commitOutput = GitService.runGitCommand(
                         repositoryPath,
@@ -283,13 +303,13 @@ public class GitBridgeApp extends Application {
 
                 new GitService().runGitCommandLive(
                         repositoryPath,
-                        () -> refreshIncomingOutgoing(),
+                        () -> refreshAll(),
                         "git",
                         "push"
                 );
 
             } else {
-                refreshIncomingOutgoing();
+                refreshAll();
             }
 
             TFCommitTitle.setText("");
@@ -301,11 +321,23 @@ public class GitBridgeApp extends Application {
             log("System error: " + e.getMessage() + "\n");
         }
         refreshCommitHistory();
+        refreshAll();
     }
 
     private void log(String text) {
         TALog.appendText(text);
         TALog.positionCaret(TALog.getLength());
+    }
+
+    private void refreshAll() {
+
+        refreshIncomingOutgoing();
+
+        if (TVChanges.getSelectionModel().getSelectedItem() != null) {
+            return;
+        } else {
+            refreshChanges();
+        }
     }
 
     private void refreshCommitHistory() {
@@ -377,8 +409,8 @@ public class GitBridgeApp extends Application {
                 String[] parts = output.trim().split("\\s+");
 
                 if (parts.length >= 2) {
-                    LBOutgoing.setText("Push: " + parts[0] + " ▲");
-                    LBIncoming.setText("Pull: " + parts[1] + " ▼");
+                    LBOutgoing.setText("Push (" + parts[0] + ") ▲");
+                    LBIncoming.setText("Pull (" + parts[1] + ") ▼");
                 }
             }
         }
@@ -408,23 +440,34 @@ public class GitBridgeApp extends Application {
 
             String output = task.getValue();
 
-            String[] parts = output.replace("gitbridge-app/", "").split("\\n");
+            String[] lines = output.split("\\R");
 
             TVChanges.getItems().clear();
 
-            for (String line : parts) {
+            for (String line : lines) {
+
+                if (line.isBlank() || line.length() < 4) continue;
 
                 String badge = line.substring(0, 2).trim();
-                String file = line.substring(3).trim();
 
-                TVChanges.getItems().add(new ChangeItem(badge, file));
+//                String path = line.substring(3).trim();
+//
+//                int slashIndex = path.indexOf("/");
+//
+//                if (slashIndex != -1) {
+//                    path = path.substring(slashIndex + 1);
+//                }
+
+                String path = line.substring(3).trim();
+
+                TVChanges.getItems().add(new ChangeItem(badge, path));
             }
 
             autoResizeFileColumn();
-            refreshIncomingOutgoing();
             LBChanges.setText("Changes: (" + TVChanges.getItems().size() + ")");
-        }
-        );
+            TADiff.clear();
+        });
+
         new Thread(task).start();
     }
 
@@ -462,6 +505,18 @@ public class GitBridgeApp extends Application {
         VBRight.setMaxWidth(Double.MAX_VALUE);
     }
 
+    private void showDiff(String fileName) {
+        try {
+
+            String diffOutput = GitService.runGitCommand(repositoryPath, "git", "diff", "--", fileName);
+
+            TADiff.clear();
+            TADiff.setText(diffOutput);
+        } catch (Exception e) {
+            TALog.appendText(e.getMessage() + "\n");
+        }
+    }
+
     private void styless() {
         HBPathContainer.getStyleClass().add("path-container");
         LBRepoStatus.getStyleClass().add("repo-status");
@@ -474,7 +529,6 @@ public class GitBridgeApp extends Application {
     private void buildTop() {
         Button BTSelectRepository = new Button();
         BTSelectRepository.setText("Select Repository");
-        BTSelectRepository.setOnAction(e -> System.out.println("¡Botón presionado!"));
         BTSelectRepository.getStyleClass().add("secondary-button");
         BTSelectRepository.setOnAction(e -> selectRepository());
         HBTop.getChildren().add(BTSelectRepository);
@@ -511,15 +565,22 @@ public class GitBridgeApp extends Application {
 
                 TFPath.setText(repositoryPath);
 
-
-
-                refreshChanges();
+                //refreshChanges();
 
                 setRepoStatus("✔ Repo OK", "repo-ok");
 
                 setDisableInit(false);
 
                 refreshCommitHistory();
+
+                refreshChanges();
+
+                refreshAll();
+
+                TADiff.clear();
+                TALog.clear();
+                TADescription.clear();
+                TFCommitTitle.setText("");
 
             } else {
                 setRepoStatus("✖ Repo Error", "repo-invalid");
@@ -542,20 +603,19 @@ public class GitBridgeApp extends Application {
         Button BTRefresh = new Button();
         BTRefresh.setText("Refresh");
         BTRefresh.setOnAction(e -> {
+            refreshAll();
             refreshChanges();
             refreshCommitHistory();
+            TALog.clear();
         });
         BTRefresh.getStyleClass().add("secondary-button");
         HBLeft.getChildren().add(BTRefresh);
 
-        LBOutgoing.setText("Push: 0 ▲");
+        LBOutgoing.setText("Push (0) ▲");
         LBOutgoing.setStyle("-fx-font-size: 14px;");
         HBLeft.getChildren().add(LBOutgoing);
 
         buildTableChanges();
-
-        VBox.setVgrow(VBLeft, Priority.ALWAYS);
-        VBox.setVgrow(VBRight, Priority.ALWAYS);
 
         VBLeft.setMaxHeight(Double.MAX_VALUE);
         VBRight.setMaxHeight(Double.MAX_VALUE);
@@ -596,7 +656,6 @@ public class GitBridgeApp extends Application {
 
         BTCommitPush.setText("Commit & Push");
         BTCommitPush.setMaxWidth(Double.MAX_VALUE);
-        BTCommitPush.setMaxWidth(Double.MAX_VALUE);
         BTCommitPush.getStyleClass().add("primary-button");
         BTCommitPush.setOnAction(e -> commitPush());
         VBLeft.getChildren().add(BTCommitPush);
@@ -607,8 +666,6 @@ public class GitBridgeApp extends Application {
         LBChanges.getStyleClass().add("title-panel");
 
         VBox.setMargin(LBChanges, new Insets(8, 0, 0, 0));
-
-        TableColumn<ChangeItem, String> colStatus = new TableColumn<>();
 
         colStatus.setCellValueFactory(data ->
                 new SimpleStringProperty(data.getValue().getStatus()));
@@ -654,7 +711,7 @@ public class GitBridgeApp extends Application {
 
         colFile.setResizable(false);
         colFile.setMinWidth(200);
-        TVChanges.setSelectionModel(null);
+        //TVChanges.setSelectionModel(null);
         colFile.setPrefWidth(400);
         colFile.setMinWidth(200);
         colFile.setResizable(true);
@@ -664,12 +721,21 @@ public class GitBridgeApp extends Application {
         TVChanges.setMaxHeight(Double.MAX_VALUE);
         VBChanges.getChildren().addAll(LBChanges, TVChanges);
         TVChanges.setMaxWidth(Double.MAX_VALUE);
-        TVChanges.getStyleClass().add("table-view");
         TVChanges.getStyleClass().add("tv-changes");
+
+        TVChanges.getSelectionModel().selectedItemProperty().addListener(
+                (observable, oldValue, newValue) ->{
+
+                    if (newValue != null) {
+                        String fileName = newValue.getFileName();
+
+                        showDiff(fileName);
+                    }
+                }
+        );
     }
 
     private void autoResizeFileColumn() {
-
         double max = 0;
 
         for (ChangeItem item : TVChanges.getItems()) {
@@ -691,11 +757,14 @@ public class GitBridgeApp extends Application {
 
         Button BTPull = new Button();
         BTPull.setText("Pull changes");
-        BTPull.setOnAction(e -> pullChanges());
+        BTPull.setOnAction(e -> {
+            pullChanges();
+            refreshCommitHistory();
+        });
         BTPull.getStyleClass().add("secondary-button");
         HBRight.getChildren().add(BTPull);
 
-        LBIncoming.setText("Pull: 0 ▼");
+        LBIncoming.setText("Pull (0) ▼");
         LBIncoming.setStyle("-fx-font-size: 14px;");
         HBRight.getChildren().add(LBIncoming);
 
@@ -706,7 +775,7 @@ public class GitBridgeApp extends Application {
         LBLog.getStyleClass().add("title-panel");
 
         TALog.setEditable(false);
-        TALog.setWrapText(true);
+        TALog.setWrapText(false);
         VBox.setVgrow(TALog, Priority.ALWAYS);
         TALog.setMaxHeight(Double.MAX_VALUE);
         TALog.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 14px;");
@@ -750,7 +819,7 @@ public class GitBridgeApp extends Application {
                 VBHistory
         );
 
-        splitRight.setDividerPositions(0.3, 0.6);
+        splitRight.setDividerPositions(0.308, 0.617);
 
         VBox.setVgrow(splitRight, Priority.ALWAYS);
         splitRight.setMaxHeight(Double.MAX_VALUE);
