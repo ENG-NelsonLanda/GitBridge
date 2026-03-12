@@ -227,7 +227,14 @@ public class GitBridgeApp extends Application {
 
                 new GitService().runGitCommandLive(
                         repositoryPath,
-                        () -> refreshAll(),
+                        () -> {
+                            Platform.runLater(() -> {
+                                TVChanges.getSelectionModel().clearSelection();
+                                CADiff.clear();
+                                refreshChanges();
+                                refreshCommitHistory();
+                            });
+                        },
                         "git",
                         "push"
                 );
@@ -309,7 +316,10 @@ public class GitBridgeApp extends Application {
                 );
 
             } else {
-                refreshAll();
+                TVChanges.getSelectionModel().clearSelection();
+                CADiff.clear();
+                refreshChanges();
+                refreshCommitHistory();
             }
 
             TFCommitTitle.setText("");
@@ -320,12 +330,6 @@ public class GitBridgeApp extends Application {
 
             log("System error: " + e.getMessage() + "\n");
         }
-
-        TVChanges.getSelectionModel().clearSelection();
-        CADiff.clear();
-
-        refreshChanges();
-        refreshCommitHistory();
     }
 
     private void log(String text) {
