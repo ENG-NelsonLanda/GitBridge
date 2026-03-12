@@ -101,7 +101,7 @@ public class GitBridgeApp extends Application {
         primaryStage.show();
 
         Timeline autoRefresh = new Timeline(
-                new KeyFrame(Duration.seconds(1), e -> {
+                new KeyFrame(Duration.seconds(3), e -> {
                     if (repositoryPath != null) {
                         refreshAll();
                     }
@@ -320,10 +320,12 @@ public class GitBridgeApp extends Application {
 
             log("System error: " + e.getMessage() + "\n");
         }
-        refreshCommitHistory();
-        refreshAll();
-        refreshChanges();
+
+        TVChanges.getSelectionModel().clearSelection();
         CADiff.clear();
+
+        refreshChanges();
+        refreshCommitHistory();
     }
 
     private void log(String text) {
