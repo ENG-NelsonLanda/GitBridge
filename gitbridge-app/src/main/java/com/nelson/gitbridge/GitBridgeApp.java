@@ -325,6 +325,7 @@ public class GitBridgeApp extends Application {
             TFCommitTitle.setText("");
             TADescription.setText("");
             BTCommitPush.setDisable(false);
+            refreshChanges();
 
         } catch (Exception e) {
 
