@@ -58,7 +58,7 @@ public class GitBridgeApp extends Application {
     TextArea TALog = new TextArea();
     TextArea TADescription = new TextArea();
     TextArea TAHistory = new TextArea();
-    CodeArea TADiff = new CodeArea();
+    CodeArea CADiff = new CodeArea();
 
     // ===== Labels =====
     Label LBOutgoing = new Label();
@@ -101,7 +101,7 @@ public class GitBridgeApp extends Application {
         primaryStage.show();
 
         Timeline autoRefresh = new Timeline(
-                new KeyFrame(Duration.seconds(3), e -> {
+                new KeyFrame(Duration.seconds(1), e -> {
                     if (repositoryPath != null) {
                         refreshAll();
                     }
@@ -322,6 +322,8 @@ public class GitBridgeApp extends Application {
         }
         refreshCommitHistory();
         refreshAll();
+        refreshChanges();
+        CADiff.clear();
     }
 
     private void log(String text) {
@@ -457,7 +459,7 @@ public class GitBridgeApp extends Application {
 
             autoResizeFileColumn();
             LBChanges.setText("Changes: (" + TVChanges.getItems().size() + ")");
-            TADiff.clear();
+            CADiff.clear();
         });
 
         new Thread(task).start();
@@ -508,18 +510,18 @@ public class GitBridgeApp extends Application {
                     fileName
             );
 
-            TADiff.clear();
+            CADiff.clear();
 
             for (String line : diffOutput.split("\\R")) {
 
-                int start = TADiff.getLength();
-                TADiff.appendText(line + "\n");
+                int start = CADiff.getLength();
+                CADiff.appendText(line + "\n");
 
                 if (line.startsWith("+") && !line.startsWith("+++")) {
-                    TADiff.setStyleClass(start, start + line.length(), "diff-added");
+                    CADiff.setStyleClass(start, start + line.length(), "diff-added");
                 }
                 else if (line.startsWith("-") && !line.startsWith("---")) {
-                    TADiff.setStyleClass(start, start + line.length(), "diff-removed");
+                    CADiff.setStyleClass(start, start + line.length(), "diff-removed");
                 }
             }
 
@@ -586,7 +588,7 @@ public class GitBridgeApp extends Application {
 
                 refreshAll();
 
-                TADiff.clear();
+                CADiff.clear();
                 TALog.clear();
                 TADescription.clear();
                 TFCommitTitle.setText("");
@@ -809,14 +811,14 @@ public class GitBridgeApp extends Application {
         VBox.setMargin(LBDiff, new Insets(8, 0, 0, 0));
         LBDiff.getStyleClass().add("title-panel");
 
-        TADiff.setEditable(false);
-        TADiff.setWrapText(false);
-        VBox.setVgrow(TADiff, Priority.ALWAYS);
-        TADiff.setMaxHeight(Double.MAX_VALUE);
-        TADiff.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 14px;");
-        TADiff.getStyleClass().add("console-log");
+        CADiff.setEditable(false);
+        CADiff.setWrapText(false);
+        VBox.setVgrow(CADiff, Priority.ALWAYS);
+        CADiff.setMaxHeight(Double.MAX_VALUE);
+        CADiff.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 14px;");
+        CADiff.getStyleClass().add("console-log");
 
-        VirtualizedScrollPane<CodeArea> diffPane = new VirtualizedScrollPane<>(TADiff);
+        VirtualizedScrollPane<CodeArea> diffPane = new VirtualizedScrollPane<>(CADiff);
 
         VBox.setVgrow(diffPane, Priority.ALWAYS);
         diffPane.setMaxHeight(Double.MAX_VALUE);
@@ -852,9 +854,9 @@ public class GitBridgeApp extends Application {
 
         splitRight.getStyleClass().add("split-pane");
 
-        TADiff.setEditable(false);
-        TADiff.setWrapText(false);
-        TADiff.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 14px;");
+        CADiff.setEditable(false);
+        CADiff.setWrapText(false);
+        CADiff.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 14px;");
     }
 
     public static void main(String[] args) {
