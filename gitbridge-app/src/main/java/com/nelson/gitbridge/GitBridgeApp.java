@@ -19,7 +19,8 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import javafx.geometry.Insets;
 import javafx.util.Duration;
-import javafx.beans.InvalidationListener;
+import org.fxmisc.flowless.VirtualizedScrollPane;
+import org.fxmisc.richtext.CodeArea;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -57,7 +58,7 @@ public class GitBridgeApp extends Application {
     TextArea TALog = new TextArea();
     TextArea TADescription = new TextArea();
     TextArea TAHistory = new TextArea();
-    TextArea TADiff = new TextArea();
+    CodeArea TADiff = new CodeArea();
 
     // ===== Labels =====
     Label LBOutgoing = new Label();
@@ -102,7 +103,6 @@ public class GitBridgeApp extends Application {
         Timeline autoRefresh = new Timeline(
                 new KeyFrame(Duration.seconds(3), e -> {
                     if (repositoryPath != null) {
-                        //refreshChanges();
                         refreshAll();
                     }
                 })
@@ -450,14 +450,6 @@ public class GitBridgeApp extends Application {
 
                 String badge = line.substring(0, 2).trim();
 
-//                String path = line.substring(3).trim();
-//
-//                int slashIndex = path.indexOf("/");
-//
-//                if (slashIndex != -1) {
-//                    path = path.substring(slashIndex + 1);
-//                }
-
                 String path = line.substring(3).trim();
 
                 TVChanges.getItems().add(new ChangeItem(badge, path));
@@ -508,10 +500,29 @@ public class GitBridgeApp extends Application {
     private void showDiff(String fileName) {
         try {
 
-            String diffOutput = GitService.runGitCommand(repositoryPath, "git", "diff", "--", fileName);
+            String diffOutput = GitService.runGitCommand(
+                    repositoryPath,
+                    "git",
+                    "diff",
+                    "--",
+                    fileName
+            );
 
             TADiff.clear();
-            TADiff.setText(diffOutput);
+
+            for (String line : diffOutput.split("\\R")) {
+
+                int start = TADiff.getLength();
+                TADiff.appendText(line + "\n");
+
+                if (line.startsWith("+") && !line.startsWith("+++")) {
+                    TADiff.setStyleClass(start, start + line.length(), "diff-added");
+                }
+                else if (line.startsWith("-") && !line.startsWith("---")) {
+                    TADiff.setStyleClass(start, start + line.length(), "diff-removed");
+                }
+            }
+
         } catch (Exception e) {
             TALog.appendText(e.getMessage() + "\n");
         }
@@ -564,8 +575,6 @@ public class GitBridgeApp extends Application {
                 repositoryPath = selectedDirectory.getAbsolutePath();
 
                 TFPath.setText(repositoryPath);
-
-                //refreshChanges();
 
                 setRepoStatus("✔ Repo OK", "repo-ok");
 
@@ -711,7 +720,6 @@ public class GitBridgeApp extends Application {
 
         colFile.setResizable(false);
         colFile.setMinWidth(200);
-        //TVChanges.setSelectionModel(null);
         colFile.setPrefWidth(400);
         colFile.setMinWidth(200);
         colFile.setResizable(true);
@@ -808,7 +816,14 @@ public class GitBridgeApp extends Application {
         TADiff.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 14px;");
         TADiff.getStyleClass().add("console-log");
 
-        VBDiff.getChildren().addAll(LBDiff, TADiff);
+        VirtualizedScrollPane<CodeArea> diffPane = new VirtualizedScrollPane<>(TADiff);
+
+        VBox.setVgrow(diffPane, Priority.ALWAYS);
+        diffPane.setMaxHeight(Double.MAX_VALUE);
+
+        VBDiff.getChildren().addAll(LBDiff, diffPane);
+
+        VBox.setVgrow(VBDiff, Priority.ALWAYS);
 
         splitRight.setOrientation(Orientation.VERTICAL);
 
@@ -836,6 +851,10 @@ public class GitBridgeApp extends Application {
         splitCenter.getStyleClass().add("split-pane");
 
         splitRight.getStyleClass().add("split-pane");
+
+        TADiff.setEditable(false);
+        TADiff.setWrapText(false);
+        TADiff.setStyle("-fx-font-family: 'Consolas'; -fx-font-size: 14px;");
     }
 
     public static void main(String[] args) {

@@ -313,3 +313,12 @@
 .split-pane > .split-pane-divider {
     -fx-background-color: transparent;
 }
+
+
+.diff-added {
+    -fx-fill: #0EA60C;
+}
+
+.diff-removed {
+    -fx-fill: #ff5252;
+}
