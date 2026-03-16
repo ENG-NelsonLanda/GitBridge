@@ -168,6 +168,12 @@ public class GitBridgeApp extends Application {
 
                     process.waitFor();
 
+                    int exitCode = process.waitFor();
+
+                    if (exitCode != 0) {
+                        Platform.runLater(() -> log("Git command failed (exit " + exitCode + ")\n"));
+                    }
+
                     return null;
                 }
             };
@@ -209,125 +215,85 @@ public class GitBridgeApp extends Application {
 
         BTCommitPush.setDisable(true);
         TALog.clear();
-        try {
 
-            String status = GitService.runGitCommand(
-                    repositoryPath,
-                    "git",
-                    "status",
-                    "--porcelain"
-            );
+        String title = TFCommitTitle.getText().trim();
+        String description = TADescription.getText().trim();
 
-            if (status == null || status.isBlank()) {
-
-                log("No changes to commit. Pushing existing commits...\n");
-
-                new GitService().runGitCommandLive(
-                        repositoryPath,
-                        () -> {
-                            Platform.runLater(() -> {
-                                TVChanges.getSelectionModel().clearSelection();
-                                CADiff.clear();
-                                refreshChanges();
-                                refreshCommitHistory();
-                            });
-                        },
-                        "git",
-                        "push"
-                );
-
-                return;
-            }
-
-            String title = TFCommitTitle.getText().trim();
-
-            if (title.isBlank()) {
-                log("Commit message is empty\n");
-                return;
-            }
-
-            log("Adding changes...\n");
-            GitService.runGitCommand(repositoryPath, "git", "add", ".");
-
-            log("Creating commit...\n");
-
-            String description = TADescription.getText().trim();
-
-            String commitOutput;
-
-            if (description.isBlank()) {
-
-                commitOutput = GitService.runGitCommand(
-                        repositoryPath,
-                        "git",
-                        "commit",
-                        "-m",
-                        title
-                );
-
-            } else {
-
-                commitOutput = GitService.runGitCommand(
-                        repositoryPath,
-                        "git",
-                        "commit",
-                        "-m",
-                        title,
-                        "-m",
-                        description
-                );
-            }
-
-            log(commitOutput);
-
-            log("Pushing to remote...\n");
-
-            String pushOutput = GitService.runGitCommand(
-                    repositoryPath,
-                    "git",
-                    "push"
-            );
-
-            log(pushOutput);
-
-            if (pushOutput.contains("non-fast-forward") || pushOutput.contains("failed to push")) {
-
-                log("Remote has new commits. Pulling with rebase...\n");
-
-                String pullOutput = GitService.runGitCommand(
-                        repositoryPath,
-                        "git",
-                        "pull",
-                        "--rebase"
-                );
-
-                log(pullOutput);
-
-                log("Retrying push...\n");
-
-                new GitService().runGitCommandLive(
-                        repositoryPath,
-                        () -> refreshAll(),
-                        "git",
-                        "push"
-                );
-
-            } else {
-                TVChanges.getSelectionModel().clearSelection();
-                CADiff.clear();
-                refreshChanges();
-                refreshCommitHistory();
-            }
-
-            TFCommitTitle.setText("");
-            TADescription.setText("");
+        if (title.isBlank()) {
+            log("Commit message is empty\n");
             BTCommitPush.setDisable(false);
-            refreshChanges();
-
-        } catch (Exception e) {
-
-            log("System error: " + e.getMessage() + "\n");
+            return;
         }
+
+        GitService service = new GitService();
+
+        log("Adding changes...\n");
+
+        service.runGitCommandLive(
+                repositoryPath,
+                () -> {
+
+                    log("Creating commit...\n");
+
+                    if (description.isBlank()) {
+
+                        service.runGitCommandLive(
+                                repositoryPath,
+                                () -> pushStep(),
+                                "git",
+                                "commit",
+                                "-m",
+                                title
+                        );
+
+                    } else {
+
+                        service.runGitCommandLive(
+                                repositoryPath,
+                                () -> pushStep(),
+                                "git",
+                                "commit",
+                                "-m",
+                                title,
+                                "-m",
+                                description
+                        );
+
+                    }
+
+                },
+                "git",
+                "add",
+                "."
+        );
+    }
+
+    private void pushStep() {
+
+        log("Pushing to remote...\n");
+
+        new GitService().runGitCommandLive(
+                repositoryPath,
+                () -> {
+
+                    Platform.runLater(() -> {
+
+                        log("Operation finished\n");
+
+                        TFCommitTitle.clear();
+                        TADescription.clear();
+
+                        refreshAll();
+                        refreshCommitHistory();
+
+                        BTCommitPush.setDisable(false);
+
+                    });
+
+                },
+                "git",
+                "push"
+        );
     }
 
     private void log(String text) {
