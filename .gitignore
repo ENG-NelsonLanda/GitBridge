@@ -47,3 +47,4 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.swp
+gitbridge-app/dist/
