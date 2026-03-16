@@ -33,7 +33,6 @@ public class GitBridgeApp extends Application {
 
     // ===== Layout Containers =====
     BorderPane BPMain = new BorderPane();
-
     HBox HBTop = new HBox();
     HBox HBPathContainer = new HBox();
 
@@ -209,9 +208,7 @@ public class GitBridgeApp extends Application {
     private void commitPush() {
 
         BTCommitPush.setDisable(true);
-
         TALog.clear();
-
         try {
 
             String status = GitService.runGitCommand(
@@ -375,7 +372,7 @@ public class GitBridgeApp extends Application {
     }
 
     private void refreshIncomingOutgoing() {
-         Task<String> task = new Task<>() {
+        Task<String> task = new Task<>() {
 
             @Override
             protected String call() throws Exception {
@@ -412,17 +409,17 @@ public class GitBridgeApp extends Application {
         };
 
         task.setOnSucceeded(e -> {
-            String output = task.getValue();
+                    String output = task.getValue();
 
-            if (output != null) {
-                String[] parts = output.trim().split("\\s+");
+                    if (output != null) {
+                        String[] parts = output.trim().split("\\s+");
 
-                if (parts.length >= 2) {
-                    LBOutgoing.setText("Push (" + parts[0] + ") ▲");
-                    LBIncoming.setText("Pull (" + parts[1] + ") ▼");
+                        if (parts.length >= 2) {
+                            LBOutgoing.setText("Push (" + parts[0] + ") ▲");
+                            LBIncoming.setText("Pull (" + parts[1] + ") ▼");
+                        }
+                    }
                 }
-            }
-        }
         );
         Thread thread = new Thread(task);
         thread.setDaemon(true);
@@ -448,7 +445,6 @@ public class GitBridgeApp extends Application {
         task.setOnSucceeded(e -> {
 
             String output = task.getValue();
-
             String[] lines = output.split("\\R");
 
             TVChanges.getItems().clear();
@@ -492,7 +488,6 @@ public class GitBridgeApp extends Application {
     }
 
     private void assembleLayout() {
-
         HBTop.getChildren().add(HBPathContainer);
 
         splitCenter.getItems().addAll(VBLeft, VBRight);
@@ -526,8 +521,7 @@ public class GitBridgeApp extends Application {
 
                 if (line.startsWith("+") && !line.startsWith("+++")) {
                     CADiff.setStyleClass(start, start + line.length(), "diff-added");
-                }
-                else if (line.startsWith("-") && !line.startsWith("---")) {
+                } else if (line.startsWith("-") && !line.startsWith("---")) {
                     CADiff.setStyleClass(start, start + line.length(), "diff-removed");
                 }
             }
@@ -590,9 +584,7 @@ public class GitBridgeApp extends Application {
                 setDisableInit(false);
 
                 refreshCommitHistory();
-
                 refreshChanges();
-
                 refreshAll();
 
                 CADiff.clear();
@@ -606,12 +598,10 @@ public class GitBridgeApp extends Application {
         }
     }
 
-        private void setRepoStatus(String text, String styleClass) {
+    private void setRepoStatus(String text, String styleClass) {
         LBRepoStatus.setText(text);
-
-            LBRepoStatus.getStyleClass().removeAll("repo-ok", "repo-invalid", "repo-neutral");
-
-            LBRepoStatus.getStyleClass().add(styleClass);
+        LBRepoStatus.getStyleClass().removeAll("repo-ok", "repo-invalid", "repo-neutral");
+        LBRepoStatus.getStyleClass().add(styleClass);
     }
 
     private void buildLeft() {
