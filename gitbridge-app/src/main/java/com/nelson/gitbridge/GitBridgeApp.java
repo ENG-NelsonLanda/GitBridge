@@ -185,9 +185,6 @@ public class GitBridgeApp extends Application {
                                 log("Git command failed (exit " + exitCode + ")\n"));
                     }
 
-                    log("✔ Operation finished\n");
-                    log("───────────────────────────────────────────────\n");
-
                     return null;
                 }
             };
