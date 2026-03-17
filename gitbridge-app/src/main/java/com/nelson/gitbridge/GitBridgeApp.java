@@ -146,7 +146,13 @@ public class GitBridgeApp extends Application {
 
                     String commandString = String.join(" ", command);
 
-                    Platform.runLater(() -> log(">>> " + commandString + "\n"));
+                    log("\n──────────────── Git Operation ────────────────\n");
+
+                    Platform.runLater(() -> {
+                        log("\n[command]\n");
+                        log("-> " + commandString + "\n\n");
+                        log("[git]\n");
+                    });
 
                     ProcessBuilder pb = new ProcessBuilder(command);
                     pb.directory(new File(repoPath));
@@ -159,8 +165,11 @@ public class GitBridgeApp extends Application {
                     );
 
                     String line;
+                    boolean hasOutput = false;
 
                     while ((line = reader.readLine()) != null) {
+
+                        hasOutput = true;
 
                         String finalLine = line;
 
@@ -169,10 +178,17 @@ public class GitBridgeApp extends Application {
 
                     int exitCode = process.waitFor();
 
+                    if (!hasOutput) {
+                        Platform.runLater(() -> log("(no output)\n"));
+                    }
+
                     if (exitCode != 0) {
                         Platform.runLater(() ->
                                 log("Git command failed (exit " + exitCode + ")\n"));
                     }
+
+                    log("✔ Operation finished\n");
+                    log("───────────────────────────────────────────────\n");
 
                     return null;
                 }
