@@ -146,8 +146,6 @@ public class GitBridgeApp extends Application {
 
                     String commandString = String.join(" ", command);
 
-                    log("\n──────────────── Git Operation ────────────────\n");
-
                     Platform.runLater(() -> {
                         log("\n[command]\n");
                         log("-> " + commandString + "\n\n");
