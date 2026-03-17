@@ -117,7 +117,6 @@ public class GitBridgeApp extends Application {
 
             ProcessBuilder processBuilder = new ProcessBuilder(command);
             processBuilder.directory(new File(repoPath));
-
             processBuilder.redirectErrorStream(true);
 
             Process process = processBuilder.start();
@@ -228,18 +227,18 @@ public class GitBridgeApp extends Application {
     }
 
     private void pullChanges() {
+
         TALog.clear();
 
         GitService service = new GitService();
 
         service.runGitCommandLive(
                 repositoryPath,
-                () -> refreshAll(),
+                () -> Platform.runLater(() -> refreshAll()),
                 "git",
                 "pull",
                 "--rebase"
         );
-        refreshAll();
     }
 
     private void commitPush() {
@@ -266,11 +265,13 @@ public class GitBridgeApp extends Application {
 
                     log("Creating commit...\n");
 
+                    Runnable afterCommit = () -> pushStep();
+
                     if (description.isBlank()) {
 
                         service.runGitCommandLive(
                                 repositoryPath,
-                                () -> pushStep(),
+                                afterCommit,
                                 "git",
                                 "commit",
                                 "-m",
@@ -281,7 +282,7 @@ public class GitBridgeApp extends Application {
 
                         service.runGitCommandLive(
                                 repositoryPath,
-                                () -> pushStep(),
+                                afterCommit,
                                 "git",
                                 "commit",
                                 "-m",
@@ -289,7 +290,6 @@ public class GitBridgeApp extends Application {
                                 "-m",
                                 description
                         );
-
                     }
 
                 },
@@ -380,11 +380,15 @@ public class GitBridgeApp extends Application {
 
             log("Operation finished\n");
 
-            TFCommitTitle.clear();
-            TADescription.clear();
+            TVChanges.getSelectionModel().clearSelection();
+            CADiff.clear();
 
-            refreshAll();
+            refreshChanges();
             refreshCommitHistory();
+            refreshAll();
+
+            TFCommitTitle.setText("");
+            TADescription.setText("");
 
             BTCommitPush.setDisable(false);
 
