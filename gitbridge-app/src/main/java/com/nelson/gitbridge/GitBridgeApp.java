@@ -145,6 +145,10 @@ public class GitBridgeApp extends Application {
                 @Override
                 protected Void call() throws Exception {
 
+                    String commandString = String.join(" ", command);
+
+                    Platform.runLater(() -> log(">>> " + commandString + "\n"));
+
                     ProcessBuilder pb = new ProcessBuilder(command);
                     pb.directory(new File(repoPath));
                     pb.redirectErrorStream(true);
@@ -161,17 +165,14 @@ public class GitBridgeApp extends Application {
 
                         String finalLine = line;
 
-                        Platform.runLater(() -> {
-                            log(finalLine + "\n");
-                        });
+                        Platform.runLater(() -> log(finalLine + "\n"));
                     }
-
-                    process.waitFor();
 
                     int exitCode = process.waitFor();
 
                     if (exitCode != 0) {
-                        Platform.runLater(() -> log("Git command failed (exit " + exitCode + ")\n"));
+                        Platform.runLater(() ->
+                                log("Git command failed (exit " + exitCode + ")\n"));
                     }
 
                     return null;
@@ -187,6 +188,36 @@ public class GitBridgeApp extends Application {
             Thread thread = new Thread(task);
             thread.setDaemon(true);
             thread.start();
+        }
+    }
+
+    private String getRepoState() {
+
+        try {
+
+            String result = GitService.runGitCommand(
+                    repositoryPath,
+                    "git",
+                    "rev-list",
+                    "--left-right",
+                    "--count",
+                    "HEAD...@{upstream}"
+            );
+
+            String[] parts = result.trim().split("\\s+");
+
+            int ahead = Integer.parseInt(parts[0]);
+            int behind = Integer.parseInt(parts[1]);
+
+            if (ahead > 0 && behind == 0) return "AHEAD";
+            if (ahead == 0 && behind > 0) return "BEHIND";
+            if (ahead > 0 && behind > 0) return "DIVERGED";
+
+            return "SYNCED";
+
+        } catch (Exception e) {
+
+            return "NO_UPSTREAM";
         }
     }
 
@@ -270,30 +301,94 @@ public class GitBridgeApp extends Application {
 
     private void pushStep() {
 
-        log("Pushing to remote...\n");
+        String state = getRepoState();
 
-        new GitService().runGitCommandLive(
-                repositoryPath,
-                () -> {
+        log("Repository state: " + state + "\n");
 
-                    Platform.runLater(() -> {
+        GitService service = new GitService();
 
-                        log("Operation finished\n");
+        switch (state) {
 
-                        TFCommitTitle.clear();
-                        TADescription.clear();
+            case "AHEAD":
 
-                        refreshAll();
-                        refreshCommitHistory();
+                log("Pushing commits...\n");
 
-                        BTCommitPush.setDisable(false);
+                service.runGitCommandLive(
+                        repositoryPath,
+                        () -> finishOperation(),
+                        "git",
+                        "push"
+                );
 
-                    });
+                break;
 
-                },
-                "git",
-                "push"
-        );
+            case "BEHIND":
+
+                log("Remote has new commits. Pulling first...\n");
+
+                service.runGitCommandLive(
+                        repositoryPath,
+                        () -> pushStep(),
+                        "git",
+                        "pull",
+                        "--rebase"
+                );
+
+                break;
+
+            case "DIVERGED":
+
+                log("Branches diverged. Performing merge pull...\n");
+
+                service.runGitCommandLive(
+                        repositoryPath,
+                        () -> pushStep(),
+                        "git",
+                        "pull",
+                        "--no-rebase"
+                );
+
+                break;
+
+            case "NO_UPSTREAM":
+
+                log("No upstream branch. Setting upstream...\n");
+
+                service.runGitCommandLive(
+                        repositoryPath,
+                        () -> finishOperation(),
+                        "git",
+                        "push",
+                        "-u",
+                        "origin",
+                        "HEAD"
+                );
+
+                break;
+
+            case "SYNCED":
+
+                log("Nothing to push.\n");
+                finishOperation();
+                break;
+        }
+    }
+
+    private void finishOperation() {
+
+        Platform.runLater(() -> {
+
+            log("Operation finished\n");
+
+            TFCommitTitle.clear();
+            TADescription.clear();
+
+            refreshAll();
+            refreshCommitHistory();
+
+            BTCommitPush.setDisable(false);
+
+        });
     }
 
     private void log(String text) {
